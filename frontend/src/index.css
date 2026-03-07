@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+@keyframes flashHighlight {
+  0% { background-color: rgba(255, 214, 0, 0.3); }
+  100% { background-color: transparent; }
+}
+.message-highlight {
+  animation: flashHighlight 2s ease-out;
+  border-radius: 0.375rem;
+}

@@ -62,6 +62,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const wsRef = useRef(null);
   const inputRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -327,6 +328,22 @@ export default function ChatRoom({ room, onJoinRoom }) {
     clearTimeout(searchDebounceRef.current);
   }
 
+  function jumpToMessage(messageId) {
+    clearSearch();
+    setHighlightedMessageId(messageId);
+    setTimeout(() => {
+      const el = document.getElementById(`message-${messageId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("message-highlight");
+        el.addEventListener("animationend", () => {
+          el.classList.remove("message-highlight");
+          setHighlightedMessageId(null);
+        }, { once: true });
+      }
+    }, 50);
+  }
+
   useEffect(() => {
     if (!searchOpen) return;
     function onKeyDown(e) {
@@ -469,7 +486,11 @@ export default function ChatRoom({ room, onJoinRoom }) {
 
             {isSearching
               ? searchResults.map((msg) => (
-                  <div key={msg.id} className="mb-3 rounded-lg bg-gray-800/50 px-4 py-3">
+                  <button
+                    key={msg.id}
+                    onClick={() => jumpToMessage(msg.id)}
+                    className="mb-3 w-full cursor-pointer rounded-lg bg-gray-800/50 px-4 py-3 text-left transition hover:bg-gray-700/60"
+                  >
                     <div className="flex items-baseline gap-2">
                       <span className={`text-sm font-semibold ${msg.user_id === user.id ? "text-indigo-400" : "text-green-400"}`}>
                         {msg.username}
@@ -479,7 +500,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
                     <p className="mt-1 text-sm leading-relaxed text-gray-200">
                       <HighlightText text={msg.content} keyword={searchQuery.trim()} />
                     </p>
-                  </div>
+                  </button>
                 ))
               : displayMessages.map((msg, idx) => {
                   const isOwn = msg.user_id === user.id;
@@ -488,7 +509,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
                   const showDividerAtTop = dividerBeforeIndex === 0 && idx === 0 && unreadCount > 0;
 
                   return (
-                    <div key={msg.id ?? idx}>
+                    <div key={msg.id ?? idx} id={msg.id ? `message-${msg.id}` : undefined}>
                       {showDividerAtTop && (
                         <div ref={dividerRef} className="my-3 flex items-center gap-3">
                           <div className="h-px flex-1 bg-red-500/60" />
