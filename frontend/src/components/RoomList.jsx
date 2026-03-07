@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 
-export default function RoomList({ selectedRoom, onSelectRoom }) {
+export default function RoomList({ selectedRoom, onSelectRoom, onLeaveRoom }) {
   const [rooms, setRooms] = useState([]);
   const [newRoomName, setNewRoomName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -37,39 +37,90 @@ export default function RoomList({ selectedRoom, onSelectRoom }) {
     }
   }
 
-  async function handleJoin(room) {
+  async function handleJoin(e, room) {
+    e.stopPropagation();
     try {
-      await api.post(`/api/rooms/${room.id}/join`);
-      onSelectRoom(room);
+      const { data } = await api.post(`/api/rooms/${room.id}/join`);
+      setRooms((prev) => prev.map((r) => (r.id === room.id ? data : r)));
+      onSelectRoom(data);
     } catch {
-      onSelectRoom(room);
+      /* silent */
     }
   }
 
+  async function handleLeave(e, room) {
+    e.stopPropagation();
+    try {
+      await api.post(`/api/rooms/${room.id}/leave`);
+      setRooms((prev) => prev.map((r) => (r.id === room.id ? { ...r, is_member: false } : r)));
+      onLeaveRoom(room.id);
+    } catch {
+      /* silent */
+    }
+  }
+
+  const joinedRooms = rooms.filter((r) => r.is_member);
+  const otherRooms = rooms.filter((r) => !r.is_member);
+
   return (
     <aside className="flex w-64 flex-col border-r border-gray-700 bg-gray-800">
+      {/* Joined rooms */}
       <div className="border-b border-gray-700 px-4 py-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Rooms</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Your Rooms</h2>
       </div>
-
-      {/* Room list */}
       <nav className="flex-1 overflow-y-auto p-2">
-        {rooms.map((room) => (
-          <button
+        {joinedRooms.map((room) => (
+          <div
             key={room.id}
-            onClick={() => handleJoin(room)}
-            className={`mb-1 flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+            className={`group mb-1 flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
               selectedRoom?.id === room.id
                 ? "bg-indigo-600 text-white"
                 : "text-gray-300 hover:bg-gray-700 hover:text-white"
             }`}
           >
-            <span className="mr-2 text-gray-500">#</span>
-            {room.name}
-          </button>
+            <button
+              onClick={() => onSelectRoom(room)}
+              className="flex flex-1 items-center text-left"
+            >
+              <span className="mr-2 text-gray-500">#</span>
+              {room.name}
+            </button>
+            <button
+              onClick={(e) => handleLeave(e, room)}
+              className="ml-1 hidden rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300 transition hover:bg-red-600 hover:text-white group-hover:block"
+            >
+              Leave
+            </button>
+          </div>
         ))}
-        {rooms.length === 0 && (
-          <p className="px-3 py-4 text-center text-xs text-gray-500">No rooms yet. Create one below!</p>
+        {joinedRooms.length === 0 && (
+          <p className="px-3 py-4 text-center text-xs text-gray-500">Join a room below to start chatting</p>
+        )}
+
+        {/* Discoverable rooms */}
+        {otherRooms.length > 0 && (
+          <>
+            <div className="mt-4 px-3 pb-1 pt-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Browse Rooms</h3>
+            </div>
+            {otherRooms.map((room) => (
+              <div
+                key={room.id}
+                className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-500"
+              >
+                <span className="flex items-center">
+                  <span className="mr-2">#</span>
+                  {room.name}
+                </span>
+                <button
+                  onClick={(e) => handleJoin(e, room)}
+                  className="rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300 transition hover:bg-indigo-600 hover:text-white"
+                >
+                  Join
+                </button>
+              </div>
+            ))}
+          </>
         )}
       </nav>
 

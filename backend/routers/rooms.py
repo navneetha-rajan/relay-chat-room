@@ -11,8 +11,23 @@ router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
 
 @router.get("", response_model=list[RoomOut])
-def list_rooms(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.scalars(select(Room).order_by(Room.created_at)).all()
+def list_rooms(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rooms = db.scalars(select(Room).order_by(Room.created_at)).all()
+    user_room_ids = set(
+        db.scalars(
+            select(RoomMember.room_id).where(RoomMember.user_id == current_user.id)
+        ).all()
+    )
+    return [
+        RoomOut(
+            id=r.id,
+            name=r.name,
+            created_by=r.created_by,
+            created_at=r.created_at,
+            is_member=r.id in user_room_ids,
+        )
+        for r in rooms
+    ]
 
 
 @router.post("", response_model=RoomOut, status_code=status.HTTP_201_CREATED)
@@ -33,10 +48,16 @@ def create_room(
     db.add(membership)
     db.commit()
     db.refresh(room)
-    return room
+    return RoomOut(
+        id=room.id,
+        name=room.name,
+        created_by=room.created_by,
+        created_at=room.created_at,
+        is_member=True,
+    )
 
 
-@router.post("/{room_id}/join", status_code=status.HTTP_200_OK)
+@router.post("/{room_id}/join", response_model=RoomOut)
 def join_room(
     room_id: int,
     db: Session = Depends(get_db),
@@ -47,12 +68,36 @@ def join_room(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
 
     already = db.get(RoomMember, (current_user.id, room_id))
-    if already:
-        return {"detail": "Already a member"}
+    if not already:
+        db.add(RoomMember(user_id=current_user.id, room_id=room_id))
+        db.commit()
 
-    db.add(RoomMember(user_id=current_user.id, room_id=room_id))
+    return RoomOut(
+        id=room.id,
+        name=room.name,
+        created_by=room.created_by,
+        created_at=room.created_at,
+        is_member=True,
+    )
+
+
+@router.post("/{room_id}/leave", status_code=status.HTTP_200_OK)
+def leave_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    room = db.get(Room, room_id)
+    if not room:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
+    membership = db.get(RoomMember, (current_user.id, room_id))
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a member")
+
+    db.delete(membership)
     db.commit()
-    return {"detail": "Joined room"}
+    return {"detail": "Left room"}
 
 
 @router.get("/{room_id}/members", response_model=list[RoomMemberOut])

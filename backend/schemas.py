@@ -34,8 +34,7 @@ class RoomOut(BaseModel):
     name: str
     created_by: int
     created_at: datetime
-
-    model_config = {"from_attributes": True}
+    is_member: bool = False
 
 
 class RoomMemberOut(BaseModel):

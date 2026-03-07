@@ -19,11 +19,15 @@ def get_messages(
     limit: int = Query(50, ge=1, le=200),
     before_id: int | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     room = db.get(Room, room_id)
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
+    membership = db.get(RoomMember, (current_user.id, room_id))
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this room")
 
     stmt = (
         select(Message, User.username)
@@ -63,8 +67,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
 
         membership = db.get(RoomMember, (user_id, room_id))
         if not membership:
-            db.add(RoomMember(user_id=user_id, room_id=room_id))
-            db.commit()
+            await websocket.close(code=4003, reason="Not a member of this room")
+            return
     finally:
         db.close()
 

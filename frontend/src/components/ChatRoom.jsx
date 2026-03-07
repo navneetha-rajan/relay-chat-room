@@ -6,13 +6,14 @@ import UserList from "./UserList";
 const TYPING_DEBOUNCE_MS = 300;
 const TYPING_EXPIRE_MS = 2000;
 
-export default function ChatRoom({ room }) {
+export default function ChatRoom({ room, onJoinRoom }) {
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [activeUserIds, setActiveUserIds] = useState([]);
   const [input, setInput] = useState("");
   const [typingUsers, setTypingUsers] = useState({});
+  const [joining, setJoining] = useState(false);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -33,7 +34,9 @@ export default function ChatRoom({ room }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  // Load data + connect WS only when member
   useEffect(() => {
+    if (!room.is_member) return;
     let cancelled = false;
 
     async function load() {
@@ -54,9 +57,10 @@ export default function ChatRoom({ room }) {
 
     load();
     return () => { cancelled = true; };
-  }, [room.id, scrollToBottom]);
+  }, [room.id, room.is_member, scrollToBottom]);
 
   useEffect(() => {
+    if (!room.is_member) return;
     let intentionalClose = false;
 
     function connect() {
@@ -110,7 +114,16 @@ export default function ChatRoom({ room }) {
       setActiveUserIds([]);
       wsRef.current?.close();
     };
-  }, [room.id, token, scrollToBottom]);
+  }, [room.id, room.is_member, token, scrollToBottom]);
+
+  // Reset state when switching to a different room
+  useEffect(() => {
+    setMessages([]);
+    setMembers([]);
+    setActiveUserIds([]);
+    setInput("");
+    setTypingUsers({});
+  }, [room.id]);
 
   function sendTypingIndicator() {
     const now = Date.now();
@@ -137,6 +150,47 @@ export default function ChatRoom({ room }) {
     return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  async function handleJoin() {
+    setJoining(true);
+    try {
+      const { data } = await api.post(`/api/rooms/${room.id}/join`);
+      onJoinRoom(data);
+    } catch {
+      /* silent */
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  // Unjoined room view
+  if (!room.is_member) {
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center border-b border-gray-700 bg-gray-800 px-6 py-3">
+          <span className="mr-2 text-xl text-gray-500">#</span>
+          <h2 className="text-lg font-semibold">{room.name}</h2>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-700">
+              <span className="text-2xl text-gray-400">#</span>
+            </div>
+            <h3 className="text-xl font-semibold">{room.name}</h3>
+            <p className="mt-2 text-sm text-gray-400">Join this room to view messages and start chatting</p>
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="mt-6 rounded-lg bg-indigo-600 px-6 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {joining ? "Joining..." : "Join Room"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Joined room view
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Room header */}

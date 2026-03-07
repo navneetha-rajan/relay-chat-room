@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import RoomList from "./RoomList";
 import ChatRoom from "./ChatRoom";
@@ -6,6 +6,19 @@ import ChatRoom from "./ChatRoom";
 export default function Chat() {
   const { user, logout } = useAuth();
   const [selectedRoom, setSelectedRoom] = useState(null);
+
+  const handleLeaveRoom = useCallback(
+    (leftRoomId) => {
+      if (selectedRoom?.id === leftRoomId) {
+        setSelectedRoom(null);
+      }
+    },
+    [selectedRoom],
+  );
+
+  const handleJoinRoom = useCallback((updatedRoom) => {
+    setSelectedRoom(updatedRoom);
+  }, []);
 
   return (
     <div className="flex h-screen flex-col">
@@ -27,9 +40,13 @@ export default function Chat() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        <RoomList selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />
+        <RoomList
+          selectedRoom={selectedRoom}
+          onSelectRoom={setSelectedRoom}
+          onLeaveRoom={handleLeaveRoom}
+        />
         {selectedRoom ? (
-          <ChatRoom room={selectedRoom} />
+          <ChatRoom room={selectedRoom} onJoinRoom={handleJoinRoom} />
         ) : (
           <div className="flex flex-1 items-center justify-center text-gray-500">
             <div className="text-center">
