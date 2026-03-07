@@ -13,7 +13,6 @@ A real-time chat application built with FastAPI and React, similar to Discord/Sl
 - **Message deletion** — Delete your own messages
 - **Markdown formatting** — Bold, italic, code blocks, quotes in messages
 - **Message search** — Search messages with jump-to-message
-- **Read receipts** — See who has read the latest message
 - **Room discovery** — Browse available rooms and join/leave freely
 
 ## Tech Stack
@@ -61,6 +60,7 @@ Open http://localhost:5173
 
 ## What I'd Improve With More Time
 
+- Complete Read Reciept implementation - IN PROGRESS
 - Replace SQLite with PostgreSQL for production scale
 - Add file and image upload support
 - Add end-to-end encryption
