@@ -14,9 +14,12 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const [input, setInput] = useState("");
   const [typingUsers, setTypingUsers] = useState({});
   const [joining, setJoining] = useState(false);
+  const [unreadDividerAfterId, setUnreadDividerAfterId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const dividerRef = useRef(null);
   const reconnectTimeout = useRef(null);
   const lastTypingSent = useRef(0);
   const typingTimers = useRef({});
@@ -27,6 +30,9 @@ export default function ChatRoom({ room, onJoinRoom }) {
     if (!el) return;
     const threshold = 100;
     isNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (isNearBottom.current && unreadDividerAfterId !== null) {
+      clearUnread();
+    }
   }
 
   const scrollToBottom = useCallback((force = false) => {
@@ -34,7 +40,13 @@ export default function ChatRoom({ room, onJoinRoom }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load data + connect WS only when member
+  function clearUnread() {
+    if (unreadDividerAfterId === null) return;
+    setUnreadDividerAfterId(null);
+    setUnreadCount(0);
+    api.post(`/api/rooms/${room.id}/read`).catch(() => {});
+  }
+
   useEffect(() => {
     if (!room.is_member) return;
     let cancelled = false;
@@ -45,9 +57,35 @@ export default function ChatRoom({ room, onJoinRoom }) {
           api.get(`/api/rooms/${room.id}/messages`),
           api.get(`/api/rooms/${room.id}/members`),
         ]);
-        if (!cancelled) {
-          setMessages(msgRes.data);
-          setMembers(memberRes.data);
+        if (cancelled) return;
+
+        const { messages: msgs, last_read_message_id } = msgRes.data;
+        setMessages(msgs);
+        setMembers(memberRes.data);
+
+        if (last_read_message_id != null && msgs.length > 0) {
+          const lastReadIdx = msgs.findIndex((m) => m.id === last_read_message_id);
+          const hasUnread = lastReadIdx >= 0 && lastReadIdx < msgs.length - 1;
+
+          if (hasUnread) {
+            const count = msgs.length - 1 - lastReadIdx;
+            setUnreadDividerAfterId(last_read_message_id);
+            setUnreadCount(count);
+            setTimeout(() => {
+              dividerRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
+            }, 50);
+          } else {
+            setUnreadDividerAfterId(null);
+            setUnreadCount(0);
+            setTimeout(() => scrollToBottom(true), 50);
+          }
+        } else if (last_read_message_id == null && msgs.length > 0) {
+          setUnreadDividerAfterId(0);
+          setUnreadCount(msgs.length);
+          setTimeout(() => {
+            dividerRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
+          }, 50);
+        } else {
           setTimeout(() => scrollToBottom(true), 50);
         }
       } catch {
@@ -116,13 +154,21 @@ export default function ChatRoom({ room, onJoinRoom }) {
     };
   }, [room.id, room.is_member, token, scrollToBottom]);
 
-  // Reset state when switching to a different room
   useEffect(() => {
     setMessages([]);
     setMembers([]);
     setActiveUserIds([]);
     setInput("");
     setTypingUsers({});
+    setUnreadDividerAfterId(null);
+    setUnreadCount(0);
+  }, [room.id]);
+
+  // Mark as read when leaving the room
+  useEffect(() => {
+    return () => {
+      api.post(`/api/rooms/${room.id}/read`).catch(() => {});
+    };
   }, [room.id]);
 
   function sendTypingIndicator() {
@@ -162,7 +208,6 @@ export default function ChatRoom({ room, onJoinRoom }) {
     }
   }
 
-  // Unjoined room view
   if (!room.is_member) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -190,17 +235,23 @@ export default function ChatRoom({ room, onJoinRoom }) {
     );
   }
 
-  // Joined room view
+  // Determine where the divider goes: after message with id === unreadDividerAfterId
+  // Special case: unreadDividerAfterId === 0 means ALL messages are unread (divider before first message)
+  const dividerBeforeIndex =
+    unreadDividerAfterId === null
+      ? -1
+      : unreadDividerAfterId === 0
+        ? 0
+        : messages.findIndex((m) => m.id === unreadDividerAfterId) + 1;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Room header */}
       <div className="flex items-center border-b border-gray-700 bg-gray-800 px-6 py-3">
         <span className="mr-2 text-xl text-gray-500">#</span>
         <h2 className="text-lg font-semibold">{room.name}</h2>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Messages area */}
         <div className="flex flex-1 flex-col">
           <div ref={scrollContainerRef} onScroll={checkIfNearBottom} className="flex-1 overflow-y-auto px-6 py-4">
             {messages.length === 0 && (
@@ -210,27 +261,47 @@ export default function ChatRoom({ room, onJoinRoom }) {
             )}
             {messages.map((msg, idx) => {
               const isOwn = msg.user_id === user.id;
-              const showAuthor =
-                idx === 0 || messages[idx - 1].user_id !== msg.user_id;
+              const showAuthor = idx === 0 || messages[idx - 1].user_id !== msg.user_id;
+              const showDivider = dividerBeforeIndex === idx && dividerBeforeIndex > 0 && unreadCount > 0;
+              const showDividerAtTop = dividerBeforeIndex === 0 && idx === 0 && unreadCount > 0;
 
               return (
-                <div key={msg.id ?? idx} className={`${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
-                  {showAuthor && (
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-sm font-semibold ${isOwn ? "text-indigo-400" : "text-green-400"}`}>
-                        {msg.username}
+                <div key={msg.id ?? idx}>
+                  {showDividerAtTop && (
+                    <div ref={dividerRef} className="my-3 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-red-500/60" />
+                      <span className="whitespace-nowrap text-xs font-semibold text-red-400">
+                        {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
                       </span>
-                      <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
+                      <div className="h-px flex-1 bg-red-500/60" />
                     </div>
                   )}
-                  <p className="text-sm leading-relaxed text-gray-200">{msg.content}</p>
+                  {showDivider && (
+                    <div ref={dividerRef} className="my-3 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-red-500/60" />
+                      <span className="whitespace-nowrap text-xs font-semibold text-red-400">
+                        {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
+                      </span>
+                      <div className="h-px flex-1 bg-red-500/60" />
+                    </div>
+                  )}
+                  <div className={`${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
+                    {showAuthor && (
+                      <div className="flex items-baseline gap-2">
+                        <span className={`text-sm font-semibold ${isOwn ? "text-indigo-400" : "text-green-400"}`}>
+                          {msg.username}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
+                      </div>
+                    )}
+                    <p className="text-sm leading-relaxed text-gray-200">{msg.content}</p>
+                  </div>
                 </div>
               );
             })}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Typing indicator */}
           {Object.keys(typingUsers).length > 0 && (
             <div className="px-6 py-1 text-xs italic text-gray-400">
               {Object.values(typingUsers).join(", ")}{" "}
@@ -238,7 +309,6 @@ export default function ChatRoom({ room, onJoinRoom }) {
             </div>
           )}
 
-          {/* Input */}
           <form onSubmit={handleSend} className="border-t border-gray-700 bg-gray-800 px-6 py-3">
             <div className="flex gap-3">
               <input

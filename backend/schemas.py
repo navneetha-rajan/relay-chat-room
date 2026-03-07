@@ -35,6 +35,7 @@ class RoomOut(BaseModel):
     created_by: int
     created_at: datetime
     is_member: bool = False
+    unread_count: int = 0
 
 
 class RoomMemberOut(BaseModel):

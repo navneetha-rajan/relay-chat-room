@@ -51,6 +51,7 @@ class RoomMember(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), primary_key=True)
     joined_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    last_read_message_id: Mapped[int | None] = mapped_column(default=None)
 
     user: Mapped["User"] = relationship(back_populates="memberships")
     room: Mapped["Room"] = relationship(back_populates="members")

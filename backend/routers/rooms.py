@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
-from models import Room, RoomMember, User
+from models import Message, Room, RoomMember, User
 from schemas import RoomCreate, RoomMemberOut, RoomOut
 from websocket_manager import app_manager
 
@@ -14,11 +14,26 @@ router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 @router.get("", response_model=list[RoomOut])
 def list_rooms(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rooms = db.scalars(select(Room).order_by(Room.created_at)).all()
-    user_room_ids = set(
-        db.scalars(
-            select(RoomMember.room_id).where(RoomMember.user_id == current_user.id)
-        ).all()
-    )
+
+    member_rows = db.execute(
+        select(RoomMember.room_id, RoomMember.last_read_message_id)
+        .where(RoomMember.user_id == current_user.id)
+    ).all()
+
+    user_room_ids: set[int] = set()
+    last_read_map: dict[int, int | None] = {}
+    for room_id, last_read_id in member_rows:
+        user_room_ids.add(room_id)
+        last_read_map[room_id] = last_read_id
+
+    unread_counts: dict[int, int] = {}
+    for room_id in user_room_ids:
+        last_read_id = last_read_map[room_id]
+        stmt = select(func.count(Message.id)).where(Message.room_id == room_id)
+        if last_read_id is not None:
+            stmt = stmt.where(Message.id > last_read_id)
+        unread_counts[room_id] = db.scalar(stmt) or 0
+
     return [
         RoomOut(
             id=r.id,
@@ -26,6 +41,7 @@ def list_rooms(db: Session = Depends(get_db), current_user: User = Depends(get_c
             created_by=r.created_by,
             created_at=r.created_at,
             is_member=r.id in user_room_ids,
+            unread_count=unread_counts.get(r.id, 0),
         )
         for r in rooms
     ]
@@ -81,7 +97,10 @@ async def join_room(
 
     already = db.get(RoomMember, (current_user.id, room_id))
     if not already:
-        db.add(RoomMember(user_id=current_user.id, room_id=room_id))
+        latest_msg_id = db.scalar(
+            select(Message.id).where(Message.room_id == room_id).order_by(Message.id.desc()).limit(1)
+        )
+        db.add(RoomMember(user_id=current_user.id, room_id=room_id, last_read_message_id=latest_msg_id))
         db.commit()
 
         member_count = db.scalar(
@@ -102,6 +121,7 @@ async def join_room(
         created_by=room.created_by,
         created_at=room.created_at,
         is_member=True,
+        unread_count=0,
     )
 
 

@@ -52,30 +52,40 @@ export default function RoomList({ rooms, selectedRoom, onSelectRoom, onLeaveRoo
         <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Your Rooms</h2>
       </div>
       <nav className="flex-1 overflow-y-auto p-2">
-        {joinedRooms.map((room) => (
-          <div
-            key={room.id}
-            className={`group mb-1 flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
-              selectedRoom?.id === room.id
-                ? "bg-indigo-600 text-white"
-                : "text-gray-300 hover:bg-gray-700 hover:text-white"
-            }`}
-          >
-            <button
-              onClick={() => onSelectRoom(room)}
-              className="flex flex-1 items-center text-left"
+        {joinedRooms.map((room) => {
+          const hasUnread = room.unread_count > 0;
+          return (
+            <div
+              key={room.id}
+              className={`group mb-1 flex w-full items-center rounded-lg px-3 py-2 text-sm transition ${
+                selectedRoom?.id === room.id
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
+              }`}
             >
-              <span className="mr-2 text-gray-500">#</span>
-              {room.name}
-            </button>
-            <button
-              onClick={(e) => handleLeave(e, room)}
-              className="ml-1 hidden rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300 transition hover:bg-red-600 hover:text-white group-hover:block"
-            >
-              Leave
-            </button>
-          </div>
-        ))}
+              <button
+                onClick={() => onSelectRoom(room)}
+                className="flex flex-1 items-center text-left min-w-0"
+              >
+                <span className="mr-2 text-gray-500">#</span>
+                <span className={`truncate ${hasUnread ? "font-bold text-white" : "font-medium"}`}>
+                  {room.name}
+                </span>
+                {hasUnread && (
+                  <span className="ml-auto flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+                    {room.unread_count > 99 ? "99+" : room.unread_count}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={(e) => handleLeave(e, room)}
+                className="ml-1 hidden rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300 transition hover:bg-red-600 hover:text-white group-hover:block"
+              >
+                Leave
+              </button>
+            </div>
+          );
+        })}
         {joinedRooms.length === 0 && (
           <p className="px-3 py-4 text-center text-xs text-gray-500">Join a room below to start chatting</p>
         )}

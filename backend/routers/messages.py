@@ -13,7 +13,7 @@ from websocket_manager import app_manager, manager
 router = APIRouter(tags=["messages"])
 
 
-@router.get("/api/rooms/{room_id}/messages", response_model=list[MessageOut])
+@router.get("/api/rooms/{room_id}/messages")
 def get_messages(
     room_id: int,
     limit: int = Query(50, ge=1, le=200),
@@ -39,7 +39,7 @@ def get_messages(
 
     rows = db.execute(stmt.order_by(Message.created_at.desc()).limit(limit)).all()
 
-    return [
+    messages = [
         MessageOut(
             id=msg.id,
             content=msg.content,
@@ -50,6 +50,34 @@ def get_messages(
         )
         for msg, username in reversed(rows)
     ]
+
+    return {
+        "messages": messages,
+        "last_read_message_id": membership.last_read_message_id,
+    }
+
+
+@router.post("/api/rooms/{room_id}/read")
+def mark_room_read(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    membership = db.get(RoomMember, (current_user.id, room_id))
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member")
+
+    latest = db.scalar(
+        select(Message.id)
+        .where(Message.room_id == room_id)
+        .order_by(Message.id.desc())
+        .limit(1)
+    )
+    if latest is not None:
+        membership.last_read_message_id = latest
+        db.commit()
+
+    return {"last_read_message_id": membership.last_read_message_id}
 
 
 @router.websocket("/ws/app")
@@ -139,6 +167,12 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
                 "username": username,
                 "room_id": room_id,
                 "created_at": str(created_at),
+            })
+
+            await app_manager.broadcast_all({
+                "type": "new_room_message",
+                "room_id": room_id,
+                "sender_id": user_id,
             })
     except (WebSocketDisconnect, Exception):
         pass

@@ -10,6 +10,7 @@ export default function Chat() {
   const [rooms, setRooms] = useState([]);
   const appWsRef = useRef(null);
   const reconnectTimeout = useRef(null);
+  const selectedRoomRef = useRef(null);
 
   // Fetch rooms on mount
   useEffect(() => {
@@ -23,6 +24,8 @@ export default function Chat() {
     }
     loadRooms();
   }, []);
+
+  useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
 
   // Global WebSocket for app-level events
   useEffect(() => {
@@ -53,6 +56,14 @@ export default function Chat() {
               prev.map((r) => (r.id === data.room_id ? { ...r, is_member: false } : r)),
             );
           }
+        } else if (data.type === "new_room_message") {
+          if (data.sender_id !== user.id && data.room_id !== selectedRoomRef.current?.id) {
+            setRooms((prev) =>
+              prev.map((r) =>
+                r.id === data.room_id ? { ...r, unread_count: (r.unread_count || 0) + 1 } : r,
+              ),
+            );
+          }
         }
       };
 
@@ -74,6 +85,9 @@ export default function Chat() {
 
   const handleSelectRoom = useCallback((room) => {
     setSelectedRoom(room);
+    setRooms((prev) =>
+      prev.map((r) => (r.id === room.id ? { ...r, unread_count: 0 } : r)),
+    );
   }, []);
 
   const handleLeaveRoom = useCallback(
@@ -90,7 +104,7 @@ export default function Chat() {
 
   const handleJoinRoom = useCallback((updatedRoom) => {
     setRooms((prev) =>
-      prev.map((r) => (r.id === updatedRoom.id ? updatedRoom : r)),
+      prev.map((r) => (r.id === updatedRoom.id ? { ...updatedRoom, unread_count: 0 } : r)),
     );
     setSelectedRoom(updatedRoom);
   }, []);
