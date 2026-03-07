@@ -14,6 +14,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const [input, setInput] = useState("");
   const [typingUsers, setTypingUsers] = useState({});
   const [joining, setJoining] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [unreadDividerAfterId, setUnreadDividerAfterId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef(null);
@@ -121,6 +122,9 @@ export default function ChatRoom({ room, onJoinRoom }) {
           });
         } else if (data.type === "user_left") {
           setActiveUserIds(data.active_users);
+        } else if (data.type === "message_deleted") {
+          setMessages((prev) => prev.filter((m) => m.id !== data.message_id));
+          setConfirmingDeleteId((prev) => (prev === data.message_id ? null : prev));
         } else if (data.type === "typing") {
           setTypingUsers((prev) => ({ ...prev, [data.user_id]: data.username }));
           clearTimeout(typingTimers.current[data.user_id]);
@@ -208,6 +212,15 @@ export default function ChatRoom({ room, onJoinRoom }) {
     }
   }
 
+  async function handleDelete(messageId) {
+    try {
+      await api.delete(`/api/messages/${messageId}`);
+    } catch {
+      /* WS broadcast handles removal even on error */
+    }
+    setConfirmingDeleteId(null);
+  }
+
   if (!room.is_member) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -285,7 +298,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
                       <div className="h-px flex-1 bg-red-500/60" />
                     </div>
                   )}
-                  <div className={`${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
+                  <div className={`group/msg relative ${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
                     {showAuthor && (
                       <div className="flex items-baseline gap-2">
                         <span className={`text-sm font-semibold ${isOwn ? "text-indigo-400" : "text-green-400"}`}>
@@ -294,7 +307,37 @@ export default function ChatRoom({ room, onJoinRoom }) {
                         <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                       </div>
                     )}
-                    <p className="text-sm leading-relaxed text-gray-200">{msg.content}</p>
+                    <div className="flex items-start gap-1">
+                      <p className="min-w-0 flex-1 text-sm leading-relaxed text-gray-200">{msg.content}</p>
+                      {isOwn && confirmingDeleteId !== msg.id && (
+                        <button
+                          onClick={() => setConfirmingDeleteId(msg.id)}
+                          className="mt-0.5 flex-shrink-0 rounded p-1 text-gray-500 opacity-0 transition hover:bg-gray-700 hover:text-red-400 group-hover/msg:opacity-100"
+                          title="Delete message"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    {confirmingDeleteId === msg.id && (
+                      <div className="mt-1 flex items-center gap-2 text-xs">
+                        <span className="text-gray-400">Delete this message?</span>
+                        <button
+                          onClick={() => handleDelete(msg.id)}
+                          className="rounded bg-red-600 px-2 py-0.5 font-medium text-white transition hover:bg-red-500"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmingDeleteId(null)}
+                          className="rounded bg-gray-600 px-2 py-0.5 font-medium text-gray-300 transition hover:bg-gray-500"
+                        >
+                          No
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

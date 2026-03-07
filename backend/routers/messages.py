@@ -57,6 +57,30 @@ def get_messages(
     }
 
 
+@router.delete("/api/messages/{message_id}", status_code=status.HTTP_200_OK)
+async def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    message = db.get(Message, message_id)
+    if not message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    if message.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete another user's message")
+
+    room_id = message.room_id
+    db.delete(message)
+    db.commit()
+
+    await manager.broadcast(room_id, {
+        "type": "message_deleted",
+        "message_id": message_id,
+    })
+
+    return {"detail": "Message deleted"}
+
+
 @router.post("/api/rooms/{room_id}/read")
 def mark_room_read(
     room_id: int,
