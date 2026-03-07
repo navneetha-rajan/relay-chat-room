@@ -15,11 +15,21 @@ export default function ChatRoom({ room }) {
   const [typingUsers, setTypingUsers] = useState({});
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const reconnectTimeout = useRef(null);
   const lastTypingSent = useRef(0);
   const typingTimers = useRef({});
+  const isNearBottom = useRef(true);
 
-  const scrollToBottom = useCallback(() => {
+  function checkIfNearBottom() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const threshold = 100;
+    isNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
+  const scrollToBottom = useCallback((force = false) => {
+    if (!force && !isNearBottom.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
@@ -35,7 +45,7 @@ export default function ChatRoom({ room }) {
         if (!cancelled) {
           setMessages(msgRes.data);
           setMembers(memberRes.data);
-          setTimeout(scrollToBottom, 50);
+          setTimeout(() => scrollToBottom(true), 50);
         }
       } catch {
         /* will retry on reconnect */
@@ -47,6 +57,8 @@ export default function ChatRoom({ room }) {
   }, [room.id, scrollToBottom]);
 
   useEffect(() => {
+    let intentionalClose = false;
+
     function connect() {
       const ws = new WebSocket(`${WS_BASE}/ws/${room.id}?token=${token}`);
       wsRef.current = ws;
@@ -57,6 +69,8 @@ export default function ChatRoom({ room }) {
         if (data.type === "new_message") {
           setMessages((prev) => [...prev, data]);
           setTimeout(scrollToBottom, 50);
+        } else if (data.type === "active_users") {
+          setActiveUserIds(data.active_users);
         } else if (data.type === "user_joined") {
           setActiveUserIds(data.active_users);
           setMembers((prev) => {
@@ -79,17 +93,21 @@ export default function ChatRoom({ room }) {
       };
 
       ws.onclose = () => {
-        reconnectTimeout.current = setTimeout(connect, 2000);
+        if (!intentionalClose) {
+          reconnectTimeout.current = setTimeout(connect, 2000);
+        }
       };
     }
 
     connect();
 
     return () => {
+      intentionalClose = true;
       clearTimeout(reconnectTimeout.current);
       Object.values(typingTimers.current).forEach(clearTimeout);
       typingTimers.current = {};
       setTypingUsers({});
+      setActiveUserIds([]);
       wsRef.current?.close();
     };
   }, [room.id, token, scrollToBottom]);
@@ -130,7 +148,7 @@ export default function ChatRoom({ room }) {
       <div className="flex flex-1 overflow-hidden">
         {/* Messages area */}
         <div className="flex flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div ref={scrollContainerRef} onScroll={checkIfNearBottom} className="flex-1 overflow-y-auto px-6 py-4">
             {messages.length === 0 && (
               <p className="py-8 text-center text-sm text-gray-500">
                 No messages yet. Start the conversation!

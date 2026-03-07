@@ -1,12 +1,17 @@
-export default function UserList({ members, activeUserIds }) {
-  const activeSet = new Set(activeUserIds);
+import { useMemo } from "react";
 
-  const sorted = [...members].sort((a, b) => {
-    const aOnline = activeSet.has(a.user_id);
-    const bOnline = activeSet.has(b.user_id);
-    if (aOnline !== bOnline) return aOnline ? -1 : 1;
-    return a.username.localeCompare(b.username);
-  });
+export default function UserList({ members, activeUserIds }) {
+  const sorted = useMemo(() => {
+    const activeSet = new Set(activeUserIds);
+    return [...members].sort((a, b) => {
+      const aOnline = activeSet.has(a.user_id);
+      const bOnline = activeSet.has(b.user_id);
+      if (aOnline !== bOnline) return aOnline ? -1 : 1;
+      return a.username.localeCompare(b.username);
+    });
+  }, [members, activeUserIds]);
+
+  const activeSet = new Set(activeUserIds);
 
   return (
     <aside className="flex w-56 flex-col border-l border-gray-700 bg-gray-800">

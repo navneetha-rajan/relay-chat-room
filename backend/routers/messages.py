@@ -70,11 +70,18 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
 
     await manager.connect(room_id, user_id, websocket)
 
-    await manager.broadcast(room_id, {
+    active_users = manager.get_active_users(room_id)
+
+    await manager.send_personal(room_id, user_id, {
+        "type": "active_users",
+        "active_users": active_users,
+    })
+
+    await manager.broadcast_except(room_id, user_id, {
         "type": "user_joined",
         "user_id": user_id,
         "username": username,
-        "active_users": manager.get_active_users(room_id),
+        "active_users": active_users,
     })
 
     try:
@@ -112,19 +119,16 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
                 "room_id": room_id,
                 "created_at": str(created_at),
             })
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         manager.disconnect(room_id, user_id)
-        await manager.broadcast(room_id, {
-            "type": "user_left",
-            "user_id": user_id,
-            "username": username,
-            "active_users": manager.get_active_users(room_id),
-        })
-    except Exception:
-        manager.disconnect(room_id, user_id)
-        await manager.broadcast(room_id, {
-            "type": "user_left",
-            "user_id": user_id,
-            "username": username,
-            "active_users": manager.get_active_users(room_id),
-        })
+        try:
+            await manager.broadcast(room_id, {
+                "type": "user_left",
+                "user_id": user_id,
+                "username": username,
+                "active_users": manager.get_active_users(room_id),
+            })
+        except Exception:
+            pass
