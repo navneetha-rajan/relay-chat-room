@@ -33,6 +33,20 @@ class ConnectionManager:
         for uid in stale:
             self.disconnect(room_id, uid)
 
+    async def broadcast_except(self, room_id: int, exclude_user_id: int, message: dict) -> None:
+        """Send to everyone in the room except the specified user."""
+        payload = json.dumps(message, default=str)
+        stale: list[int] = []
+        for uid, ws in self._rooms.get(room_id, {}).items():
+            if uid == exclude_user_id:
+                continue
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                stale.append(uid)
+        for uid in stale:
+            self.disconnect(room_id, uid)
+
     async def send_personal(self, room_id: int, user_id: int, message: dict) -> None:
         ws = self._rooms.get(room_id, {}).get(user_id)
         if ws:

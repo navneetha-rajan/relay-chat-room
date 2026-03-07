@@ -3,15 +3,21 @@ import api, { WS_BASE } from "../api";
 import { useAuth } from "../context/AuthContext";
 import UserList from "./UserList";
 
+const TYPING_DEBOUNCE_MS = 500;
+const TYPING_EXPIRE_MS = 2000;
+
 export default function ChatRoom({ room }) {
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [activeUserIds, setActiveUserIds] = useState([]);
   const [input, setInput] = useState("");
+  const [typingUsers, setTypingUsers] = useState({});
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const reconnectTimeout = useRef(null);
+  const lastTypingSent = useRef(0);
+  const typingTimers = useRef({});
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,6 +65,16 @@ export default function ChatRoom({ room }) {
           });
         } else if (data.type === "user_left") {
           setActiveUserIds(data.active_users);
+        } else if (data.type === "typing") {
+          setTypingUsers((prev) => ({ ...prev, [data.user_id]: data.username }));
+          clearTimeout(typingTimers.current[data.user_id]);
+          typingTimers.current[data.user_id] = setTimeout(() => {
+            setTypingUsers((prev) => {
+              const next = { ...prev };
+              delete next[data.user_id];
+              return next;
+            });
+          }, TYPING_EXPIRE_MS);
         }
       };
 
@@ -71,9 +87,25 @@ export default function ChatRoom({ room }) {
 
     return () => {
       clearTimeout(reconnectTimeout.current);
+      Object.values(typingTimers.current).forEach(clearTimeout);
+      typingTimers.current = {};
+      setTypingUsers({});
       wsRef.current?.close();
     };
   }, [room.id, token, scrollToBottom]);
+
+  function sendTypingIndicator() {
+    const now = Date.now();
+    if (now - lastTypingSent.current < TYPING_DEBOUNCE_MS) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    lastTypingSent.current = now;
+    wsRef.current.send(JSON.stringify({ type: "typing" }));
+  }
+
+  function handleInputChange(e) {
+    setInput(e.target.value);
+    sendTypingIndicator();
+  }
 
   function handleSend(e) {
     e.preventDefault();
@@ -126,13 +158,21 @@ export default function ChatRoom({ room }) {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Typing indicator */}
+          {Object.keys(typingUsers).length > 0 && (
+            <div className="px-6 py-1 text-xs italic text-gray-400">
+              {Object.values(typingUsers).join(", ")}{" "}
+              {Object.keys(typingUsers).length === 1 ? "is" : "are"} typing...
+            </div>
+          )}
+
           {/* Input */}
           <form onSubmit={handleSend} className="border-t border-gray-700 bg-gray-800 px-6 py-3">
             <div className="flex gap-3">
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 placeholder={`Message #${room.name}`}
                 maxLength={2000}
                 className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-4 py-2.5 text-sm text-white placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

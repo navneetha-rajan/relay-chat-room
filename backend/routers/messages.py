@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -78,7 +80,17 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
     try:
         while True:
             raw = await websocket.receive_text()
-            msg = WSMessage.model_validate_json(raw)
+            data = json.loads(raw)
+
+            if data.get("type") == "typing":
+                await manager.broadcast_except(room_id, user_id, {
+                    "type": "typing",
+                    "user_id": user_id,
+                    "username": username,
+                })
+                continue
+
+            msg = WSMessage.model_validate(data)
 
             db = SessionLocal()
             try:
