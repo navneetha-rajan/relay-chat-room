@@ -74,6 +74,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const lastTypingSent = useRef(0);
   const typingTimers = useRef({});
   const isNearBottom = useRef(true);
+  const hasLoadedRef = useRef(false);
 
   function checkIfNearBottom() {
     const el = scrollContainerRef.current;
@@ -112,6 +113,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
         const { messages: msgs, last_read_message_id } = msgRes.data;
         setMessages(msgs);
         setMembers(memberRes.data);
+        hasLoadedRef.current = true;
 
         if (last_read_message_id != null && msgs.length > 0) {
           const lastReadIdx = msgs.findIndex((m) => m.id === last_read_message_id);
@@ -208,6 +210,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
   }, [room.id, room.is_member, token, scrollToBottom]);
 
   useEffect(() => {
+    hasLoadedRef.current = false;
     setMessages([]);
     setMembers([]);
     setActiveUserIds([]);
@@ -221,10 +224,11 @@ export default function ChatRoom({ room, onJoinRoom }) {
     setSearching(false);
   }, [room.id]);
 
-  // Mark as read when leaving the room
   useEffect(() => {
     return () => {
-      api.post(`/api/rooms/${room.id}/read`).catch(() => {});
+      if (hasLoadedRef.current) {
+        api.post(`/api/rooms/${room.id}/read`).catch(() => {});
+      }
     };
   }, [room.id]);
 
