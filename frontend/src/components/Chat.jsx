@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api, { WS_BASE } from "../api";
 import { useAuth } from "../context/AuthContext";
 import RoomList from "./RoomList";
 import ChatRoom from "./ChatRoom";
+
+const RelayIcon = ({ className = "h-5 w-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
 
 export default function Chat() {
   const { user, token, logout } = useAuth();
@@ -12,7 +19,6 @@ export default function Chat() {
   const reconnectTimeout = useRef(null);
   const selectedRoomRef = useRef(null);
 
-  // Fetch rooms on mount
   useEffect(() => {
     async function loadRooms() {
       try {
@@ -27,7 +33,6 @@ export default function Chat() {
 
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
 
-  // Global WebSocket for app-level events
   useEffect(() => {
     let intentionalClose = false;
 
@@ -121,22 +126,23 @@ export default function Chat() {
     ? rooms.find((r) => r.id === selectedRoom.id) || selectedRoom
     : null;
 
+  const stats = useMemo(() => ({
+    totalRooms: rooms.length,
+    joinedRooms: rooms.filter((r) => r.is_member).length,
+  }), [rooms]);
+
   return (
     <div className="flex h-screen flex-col bg-[#313338]">
       {/* Top bar */}
       <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#2b2d31] px-6 py-2.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600">
-            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            <RelayIcon className="h-4 w-4 text-white" />
           </div>
-          <h1 className="text-[15px] font-semibold text-white">ChatRoom</h1>
+          <h1 className="text-[15px] font-semibold text-white">Relay</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[13px] text-gray-400">
-            <span className="text-gray-300">{user.username}</span>
-          </span>
+          <span className="text-[13px] text-gray-300">{user.username}</span>
           <button
             onClick={logout}
             className="rounded-md px-3 py-1 text-[13px] font-medium text-gray-400 transition-all duration-150 hover:bg-white/[0.06] hover:text-white"
@@ -156,18 +162,42 @@ export default function Chat() {
           onJoinRoom={handleJoinRoom}
           onRoomCreated={handleRoomCreated}
         />
+
         {currentRoom ? (
-          <ChatRoom room={currentRoom} onJoinRoom={handleJoinRoom} />
+          <div key={currentRoom.id} className="room-enter flex flex-1 overflow-hidden">
+            <ChatRoom room={currentRoom} onJoinRoom={handleJoinRoom} />
+          </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="text-center">
-              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-white/[0.04]">
-                <svg className="h-10 w-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+          /* Welcome screen */
+          <div className="welcome-gradient relative flex flex-1 items-center justify-center overflow-hidden">
+            <div className="relative z-10 text-center">
+              <div className="logo-pulse mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-500/20">
+                <RelayIcon className="h-10 w-10 text-white" />
               </div>
-              <p className="text-lg font-medium text-gray-300">Select a room to start chatting</p>
-              <p className="mt-1.5 text-sm text-gray-500">Or create a new room from the sidebar</p>
+
+              <h2 className="bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent">
+                Relay
+              </h2>
+              <p className="mt-2 text-[15px] text-gray-400">
+                Real-time conversations, instantly.
+              </p>
+
+              <div className="mx-auto mt-8 flex items-center justify-center gap-6">
+                <div className="rounded-xl bg-white/[0.04] px-5 py-3 ring-1 ring-white/[0.06]">
+                  <p className="text-2xl font-bold text-white">{stats.totalRooms}</p>
+                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+                    {stats.totalRooms === 1 ? "Room" : "Rooms"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/[0.04] px-5 py-3 ring-1 ring-white/[0.06]">
+                  <p className="text-2xl font-bold text-indigo-400">{stats.joinedRooms}</p>
+                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-gray-500">Joined</p>
+                </div>
+              </div>
+
+              <p className="mt-8 text-[13px] text-gray-500">
+                Select a room to start chatting, or create a new one
+              </p>
             </div>
           </div>
         )}

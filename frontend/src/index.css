@@ -68,3 +68,174 @@
 .online-pulse {
   animation: subtlePulse 2s ease-in-out infinite;
 }
+
+/* ── Room switch transition ────────────────────────────────────────────────── */
+@keyframes roomEnter {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.room-enter {
+  animation: roomEnter 0.2s ease-out both;
+}
+
+/* ── Welcome gradient ──────────────────────────────────────────────────────── */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.welcome-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.08) 0%,
+    rgba(139, 92, 246, 0.06) 25%,
+    rgba(79, 70, 229, 0.04) 50%,
+    rgba(99, 102, 241, 0.08) 75%,
+    rgba(139, 92, 246, 0.06) 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 12s ease infinite;
+}
+
+/* ── Welcome logo pulse ────────────────────────────────────────────────────── */
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
+  50%      { box-shadow: 0 0 0 12px rgba(99, 102, 241, 0); }
+}
+.logo-pulse {
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   LANDING / AUTH PAGE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Animated dark gradient background */
+@keyframes landingGradient {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+.landing-bg {
+  background: linear-gradient(
+    135deg,
+    #0f0b1e 0%,
+    #14102a 20%,
+    #0d1a2d 40%,
+    #111827 60%,
+    #18103a 80%,
+    #0f0b1e 100%
+  );
+  background-size: 400% 400%;
+  animation: landingGradient 20s ease infinite;
+}
+
+/* Floating orbs */
+@keyframes floatOrb1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(60px, -40px) scale(1.1); }
+  50% { transform: translate(-30px, -80px) scale(0.95); }
+  75% { transform: translate(40px, 20px) scale(1.05); }
+}
+@keyframes floatOrb2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-50px, 30px) scale(1.08); }
+  50% { transform: translate(40px, 60px) scale(0.92); }
+  75% { transform: translate(-20px, -40px) scale(1.03); }
+}
+@keyframes floatOrb3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.06); }
+  66% { transform: translate(-60px, 20px) scale(0.97); }
+}
+.orb-1 {
+  animation: floatOrb1 18s ease-in-out infinite;
+}
+.orb-2 {
+  animation: floatOrb2 22s ease-in-out infinite;
+}
+.orb-3 {
+  animation: floatOrb3 16s ease-in-out infinite;
+}
+
+/* Glass card entrance */
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.glass-card-enter {
+  animation: cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Hero entrance */
+@keyframes heroEnter {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-enter {
+  animation: heroEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Tab indicator slide */
+.tab-indicator {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Form content swap */
+@keyframes formFadeIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.form-enter {
+  animation: formFadeIn 0.2s ease-out both;
+}
+
+/* Success checkmark */
+@keyframes checkDraw {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes successScale {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.success-circle {
+  animation: successScale 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.success-check {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: checkDraw 0.3s ease-out 0.25s forwards;
+}
+
+/* Error message entrance */
+@keyframes errorSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.error-enter {
+  animation: errorSlide 0.2s ease-out both;
+}
+
+/* Page exit transition */
+@keyframes pageExit {
+  to { opacity: 0; transform: scale(1.02); filter: blur(4px); }
+}
+.page-exit {
+  animation: pageExit 0.3s ease-in forwards;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .landing-bg { animation: none; }
+  .orb-1, .orb-2, .orb-3 { animation: none; }
+  .glass-card-enter, .hero-enter, .form-enter { animation: none; opacity: 1; transform: none; }
+  .logo-pulse { animation: none; }
+}

@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./components/Login";
-import Register from "./components/Register";
 import Chat from "./components/Chat";
 
 function ProtectedRoute({ children }) {
@@ -21,7 +20,7 @@ function AppRoutes() {
         path="/login"
         element={
           <PublicRoute>
-            <Login />
+            <Login key="login" />
           </PublicRoute>
         }
       />
@@ -29,7 +28,7 @@ function AppRoutes() {
         path="/register"
         element={
           <PublicRoute>
-            <Register />
+            <Login key="register" />
           </PublicRoute>
         }
       />
