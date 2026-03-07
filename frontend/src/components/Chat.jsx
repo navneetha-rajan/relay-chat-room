@@ -117,23 +117,29 @@ export default function Chat() {
     setSelectedRoom(newRoom);
   }, []);
 
-  // Keep selectedRoom in sync with rooms state
   const currentRoom = selectedRoom
     ? rooms.find((r) => r.id === selectedRoom.id) || selectedRoom
     : null;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-[#313338]">
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-6 py-3">
-        <h1 className="text-lg font-bold tracking-tight">ChatRoom</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">
-            Signed in as <span className="font-medium text-white">{user.username}</span>
+      <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#2b2d31] px-6 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600">
+            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <h1 className="text-[15px] font-semibold text-white">ChatRoom</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] text-gray-400">
+            <span className="text-gray-300">{user.username}</span>
           </span>
           <button
             onClick={logout}
-            className="rounded-lg bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-300 transition hover:bg-gray-600 hover:text-white"
+            className="rounded-md px-3 py-1 text-[13px] font-medium text-gray-400 transition-all duration-150 hover:bg-white/[0.06] hover:text-white"
           >
             Logout
           </button>
@@ -153,23 +159,15 @@ export default function Chat() {
         {currentRoom ? (
           <ChatRoom room={currentRoom} onJoinRoom={handleJoinRoom} />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-gray-500">
+          <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <svg
-                className="mx-auto h-16 w-16 text-gray-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-              <p className="mt-4 text-lg font-medium">Select a room to start chatting</p>
-              <p className="mt-1 text-sm text-gray-600">Or create a new room from the sidebar</p>
+              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-white/[0.04]">
+                <svg className="h-10 w-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-lg font-medium text-gray-300">Select a room to start chatting</p>
+              <p className="mt-1.5 text-sm text-gray-500">Or create a new room from the sidebar</p>
             </div>
           </div>
         )}
