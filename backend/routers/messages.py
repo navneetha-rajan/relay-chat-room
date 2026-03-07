@@ -18,6 +18,7 @@ def get_messages(
     room_id: int,
     limit: int = Query(50, ge=1, le=200),
     before_id: int | None = Query(None),
+    search: str | None = Query(None, min_length=1, max_length=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -34,7 +35,11 @@ def get_messages(
         .join(User, Message.user_id == User.id)
         .where(Message.room_id == room_id)
     )
-    if before_id:
+
+    if search:
+        stmt = stmt.where(Message.content.ilike(f"%{search}%"))
+
+    if before_id and not search:
         stmt = stmt.where(Message.id < before_id)
 
     rows = db.execute(stmt.order_by(Message.created_at.desc()).limit(limit)).all()

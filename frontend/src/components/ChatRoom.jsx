@@ -31,6 +31,19 @@ const markdownComponents = {
   ),
 };
 
+function HighlightText({ text, keyword }) {
+  if (!keyword) return text;
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} className="rounded bg-yellow-500/30 px-0.5 text-yellow-200">{part}</mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 const TYPING_DEBOUNCE_MS = 300;
 const TYPING_EXPIRE_MS = 2000;
 
@@ -45,8 +58,14 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [unreadDividerAfterId, setUnreadDividerAfterId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
   const wsRef = useRef(null);
   const inputRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchDebounceRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const dividerRef = useRef(null);
@@ -195,6 +214,10 @@ export default function ChatRoom({ room, onJoinRoom }) {
     setTypingUsers({});
     setUnreadDividerAfterId(null);
     setUnreadCount(0);
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults(null);
+    setSearching(false);
   }, [room.id]);
 
   // Mark as read when leaving the room
@@ -270,6 +293,55 @@ export default function ChatRoom({ room, onJoinRoom }) {
     }
   }
 
+  function handleSearchChange(e) {
+    const q = e.target.value;
+    setSearchQuery(q);
+    clearTimeout(searchDebounceRef.current);
+
+    if (!q.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/api/rooms/${room.id}/messages`, {
+          params: { search: q.trim(), limit: 100 },
+        });
+        setSearchResults(data.messages);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }
+
+  function clearSearch() {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults(null);
+    setSearching(false);
+    clearTimeout(searchDebounceRef.current);
+  }
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onKeyDown(e) {
+      if (e.key === "Escape") clearSearch();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
+  }, [searchOpen]);
+
   if (!room.is_member) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -306,99 +378,187 @@ export default function ChatRoom({ room, onJoinRoom }) {
         ? 0
         : messages.findIndex((m) => m.id === unreadDividerAfterId) + 1;
 
+  const isSearching = searchResults !== null;
+  const displayMessages = isSearching ? searchResults : messages;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center border-b border-gray-700 bg-gray-800 px-6 py-3">
         <span className="mr-2 text-xl text-gray-500">#</span>
         <h2 className="text-lg font-semibold">{room.name}</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {searchOpen ? (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  placeholder="Search messages..."
+                  className="w-56 rounded-lg border border-gray-600 bg-gray-700 py-1.5 pl-8 pr-8 text-sm text-white placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <svg className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchQuery && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-white"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={clearSearch}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Close search"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+              title="Search messages"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col">
+          {isSearching && (
+            <div className="border-b border-gray-700 bg-gray-800/50 px-6 py-2">
+              {searching ? (
+                <span className="text-xs text-gray-400">Searching...</span>
+              ) : (
+                <span className="text-xs text-gray-400">
+                  {searchResults.length} {searchResults.length === 1 ? "result" : "results"} for{" "}
+                  <span className="font-semibold text-yellow-300">&lsquo;{searchQuery.trim()}&rsquo;</span>
+                </span>
+              )}
+            </div>
+          )}
+
           <div ref={scrollContainerRef} onScroll={checkIfNearBottom} className="flex-1 overflow-y-auto px-6 py-4">
-            {messages.length === 0 && (
+            {!isSearching && messages.length === 0 && (
               <p className="py-8 text-center text-sm text-gray-500">
                 No messages yet. Start the conversation!
               </p>
             )}
-            {messages.map((msg, idx) => {
-              const isOwn = msg.user_id === user.id;
-              const showAuthor = idx === 0 || messages[idx - 1].user_id !== msg.user_id;
-              const showDivider = dividerBeforeIndex === idx && dividerBeforeIndex > 0 && unreadCount > 0;
-              const showDividerAtTop = dividerBeforeIndex === 0 && idx === 0 && unreadCount > 0;
+            {isSearching && searchResults.length === 0 && !searching && (
+              <div className="flex flex-col items-center py-16 text-gray-500">
+                <svg className="mb-3 h-10 w-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-sm font-medium">No results found</p>
+                <p className="mt-1 text-xs text-gray-600">Try a different keyword</p>
+              </div>
+            )}
 
-              return (
-                <div key={msg.id ?? idx}>
-                  {showDividerAtTop && (
-                    <div ref={dividerRef} className="my-3 flex items-center gap-3">
-                      <div className="h-px flex-1 bg-red-500/60" />
-                      <span className="whitespace-nowrap text-xs font-semibold text-red-400">
-                        {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
+            {isSearching
+              ? searchResults.map((msg) => (
+                  <div key={msg.id} className="mb-3 rounded-lg bg-gray-800/50 px-4 py-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-sm font-semibold ${msg.user_id === user.id ? "text-indigo-400" : "text-green-400"}`}>
+                        {msg.username}
                       </span>
-                      <div className="h-px flex-1 bg-red-500/60" />
+                      <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                     </div>
-                  )}
-                  {showDivider && (
-                    <div ref={dividerRef} className="my-3 flex items-center gap-3">
-                      <div className="h-px flex-1 bg-red-500/60" />
-                      <span className="whitespace-nowrap text-xs font-semibold text-red-400">
-                        {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
-                      </span>
-                      <div className="h-px flex-1 bg-red-500/60" />
-                    </div>
-                  )}
-                  <div className={`group/msg relative ${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
-                    {showAuthor && (
-                      <div className="flex items-baseline gap-2">
-                        <span className={`text-sm font-semibold ${isOwn ? "text-indigo-400" : "text-green-400"}`}>
-                          {msg.username}
-                        </span>
-                        <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-start gap-1">
-                      <div className="min-w-0 flex-1 text-sm leading-relaxed text-gray-200">
-                        <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={markdownComponents}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
-                      {isOwn && confirmingDeleteId !== msg.id && (
-                        <button
-                          onClick={() => setConfirmingDeleteId(msg.id)}
-                          className="mt-0.5 flex-shrink-0 rounded p-1 text-gray-500 opacity-0 transition hover:bg-gray-700 hover:text-red-400 group-hover/msg:opacity-100"
-                          title="Delete message"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    {confirmingDeleteId === msg.id && (
-                      <div className="mt-1 flex items-center gap-2 text-xs">
-                        <span className="text-gray-400">Delete this message?</span>
-                        <button
-                          onClick={() => handleDelete(msg.id)}
-                          className="rounded bg-red-600 px-2 py-0.5 font-medium text-white transition hover:bg-red-500"
-                        >
-                          Yes
-                        </button>
-                        <button
-                          onClick={() => setConfirmingDeleteId(null)}
-                          className="rounded bg-gray-600 px-2 py-0.5 font-medium text-gray-300 transition hover:bg-gray-500"
-                        >
-                          No
-                        </button>
-                      </div>
-                    )}
+                    <p className="mt-1 text-sm leading-relaxed text-gray-200">
+                      <HighlightText text={msg.content} keyword={searchQuery.trim()} />
+                    </p>
                   </div>
-                </div>
-              );
-            })}
+                ))
+              : displayMessages.map((msg, idx) => {
+                  const isOwn = msg.user_id === user.id;
+                  const showAuthor = idx === 0 || displayMessages[idx - 1].user_id !== msg.user_id;
+                  const showDivider = dividerBeforeIndex === idx && dividerBeforeIndex > 0 && unreadCount > 0;
+                  const showDividerAtTop = dividerBeforeIndex === 0 && idx === 0 && unreadCount > 0;
+
+                  return (
+                    <div key={msg.id ?? idx}>
+                      {showDividerAtTop && (
+                        <div ref={dividerRef} className="my-3 flex items-center gap-3">
+                          <div className="h-px flex-1 bg-red-500/60" />
+                          <span className="whitespace-nowrap text-xs font-semibold text-red-400">
+                            {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
+                          </span>
+                          <div className="h-px flex-1 bg-red-500/60" />
+                        </div>
+                      )}
+                      {showDivider && (
+                        <div ref={dividerRef} className="my-3 flex items-center gap-3">
+                          <div className="h-px flex-1 bg-red-500/60" />
+                          <span className="whitespace-nowrap text-xs font-semibold text-red-400">
+                            {unreadCount} NEW {unreadCount === 1 ? "MESSAGE" : "MESSAGES"}
+                          </span>
+                          <div className="h-px flex-1 bg-red-500/60" />
+                        </div>
+                      )}
+                      <div className={`group/msg relative ${showAuthor && idx > 0 ? "mt-4" : "mt-0.5"}`}>
+                        {showAuthor && (
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-sm font-semibold ${isOwn ? "text-indigo-400" : "text-green-400"}`}>
+                              {msg.username}
+                            </span>
+                            <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-start gap-1">
+                          <div className="min-w-0 flex-1 text-sm leading-relaxed text-gray-200">
+                            <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={markdownComponents}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+                          {isOwn && confirmingDeleteId !== msg.id && (
+                            <button
+                              onClick={() => setConfirmingDeleteId(msg.id)}
+                              className="mt-0.5 flex-shrink-0 rounded p-1 text-gray-500 opacity-0 transition hover:bg-gray-700 hover:text-red-400 group-hover/msg:opacity-100"
+                              title="Delete message"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                        {confirmingDeleteId === msg.id && (
+                          <div className="mt-1 flex items-center gap-2 text-xs">
+                            <span className="text-gray-400">Delete this message?</span>
+                            <button
+                              onClick={() => handleDelete(msg.id)}
+                              className="rounded bg-red-600 px-2 py-0.5 font-medium text-white transition hover:bg-red-500"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmingDeleteId(null)}
+                              className="rounded bg-gray-600 px-2 py-0.5 font-medium text-gray-300 transition hover:bg-gray-500"
+                            >
+                              No
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
             <div ref={messagesEndRef} />
           </div>
 
-          {Object.keys(typingUsers).length > 0 && (
+          {!isSearching && Object.keys(typingUsers).length > 0 && (
             <div className="px-6 py-1 text-xs italic text-gray-400">
               {Object.values(typingUsers).join(", ")}{" "}
               {Object.keys(typingUsers).length === 1 ? "is" : "are"} typing...
