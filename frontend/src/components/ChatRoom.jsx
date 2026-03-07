@@ -3,7 +3,7 @@ import api, { WS_BASE } from "../api";
 import { useAuth } from "../context/AuthContext";
 import UserList from "./UserList";
 
-const TYPING_DEBOUNCE_MS = 500;
+const TYPING_DEBOUNCE_MS = 300;
 const TYPING_EXPIRE_MS = 2000;
 
 export default function ChatRoom({ room }) {
