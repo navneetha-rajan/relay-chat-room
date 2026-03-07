@@ -1,24 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import api from "../api";
 
-export default function RoomList({ selectedRoom, onSelectRoom, onLeaveRoom }) {
-  const [rooms, setRooms] = useState([]);
+export default function RoomList({ rooms, selectedRoom, onSelectRoom, onLeaveRoom, onJoinRoom, onRoomCreated }) {
   const [newRoomName, setNewRoomName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    loadRooms();
-  }, []);
-
-  async function loadRooms() {
-    try {
-      const { data } = await api.get("/api/rooms");
-      setRooms(data);
-    } catch {
-      /* rooms will stay empty */
-    }
-  }
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -27,9 +13,8 @@ export default function RoomList({ selectedRoom, onSelectRoom, onLeaveRoom }) {
     setError("");
     try {
       const { data } = await api.post("/api/rooms", { name: newRoomName.trim() });
-      setRooms((prev) => [...prev, data]);
       setNewRoomName("");
-      onSelectRoom(data);
+      onRoomCreated(data);
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to create room");
     } finally {
@@ -41,8 +26,7 @@ export default function RoomList({ selectedRoom, onSelectRoom, onLeaveRoom }) {
     e.stopPropagation();
     try {
       const { data } = await api.post(`/api/rooms/${room.id}/join`);
-      setRooms((prev) => prev.map((r) => (r.id === room.id ? data : r)));
-      onSelectRoom(data);
+      onJoinRoom(data);
     } catch {
       /* silent */
     }
@@ -52,7 +36,6 @@ export default function RoomList({ selectedRoom, onSelectRoom, onLeaveRoom }) {
     e.stopPropagation();
     try {
       await api.post(`/api/rooms/${room.id}/leave`);
-      setRooms((prev) => prev.map((r) => (r.id === room.id ? { ...r, is_member: false } : r)));
       onLeaveRoom(room.id);
     } catch {
       /* silent */

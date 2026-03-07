@@ -1,14 +1,86 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import api, { WS_BASE } from "../api";
 import { useAuth } from "../context/AuthContext";
 import RoomList from "./RoomList";
 import ChatRoom from "./ChatRoom";
 
 export default function Chat() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [rooms, setRooms] = useState([]);
+  const appWsRef = useRef(null);
+  const reconnectTimeout = useRef(null);
+
+  // Fetch rooms on mount
+  useEffect(() => {
+    async function loadRooms() {
+      try {
+        const { data } = await api.get("/api/rooms");
+        setRooms(data);
+      } catch {
+        /* silent */
+      }
+    }
+    loadRooms();
+  }, []);
+
+  // Global WebSocket for app-level events
+  useEffect(() => {
+    let intentionalClose = false;
+
+    function connect() {
+      const ws = new WebSocket(`${WS_BASE}/ws/app?token=${token}`);
+      appWsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "room_created") {
+          const newRoom = { ...data.room, is_member: data.room.created_by === user.id };
+          setRooms((prev) => {
+            if (prev.some((r) => r.id === newRoom.id)) return prev;
+            return [...prev, newRoom];
+          });
+        } else if (data.type === "room_joined") {
+          if (data.user_id === user.id) {
+            setRooms((prev) =>
+              prev.map((r) => (r.id === data.room_id ? { ...r, is_member: true } : r)),
+            );
+          }
+        } else if (data.type === "room_left") {
+          if (data.user_id === user.id) {
+            setRooms((prev) =>
+              prev.map((r) => (r.id === data.room_id ? { ...r, is_member: false } : r)),
+            );
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        if (!intentionalClose) {
+          reconnectTimeout.current = setTimeout(connect, 2000);
+        }
+      };
+    }
+
+    connect();
+
+    return () => {
+      intentionalClose = true;
+      clearTimeout(reconnectTimeout.current);
+      appWsRef.current?.close();
+    };
+  }, [token, user.id]);
+
+  const handleSelectRoom = useCallback((room) => {
+    setSelectedRoom(room);
+  }, []);
 
   const handleLeaveRoom = useCallback(
     (leftRoomId) => {
+      setRooms((prev) =>
+        prev.map((r) => (r.id === leftRoomId ? { ...r, is_member: false } : r)),
+      );
       if (selectedRoom?.id === leftRoomId) {
         setSelectedRoom(null);
       }
@@ -17,8 +89,24 @@ export default function Chat() {
   );
 
   const handleJoinRoom = useCallback((updatedRoom) => {
+    setRooms((prev) =>
+      prev.map((r) => (r.id === updatedRoom.id ? updatedRoom : r)),
+    );
     setSelectedRoom(updatedRoom);
   }, []);
+
+  const handleRoomCreated = useCallback((newRoom) => {
+    setRooms((prev) => {
+      if (prev.some((r) => r.id === newRoom.id)) return prev;
+      return [...prev, newRoom];
+    });
+    setSelectedRoom(newRoom);
+  }, []);
+
+  // Keep selectedRoom in sync with rooms state
+  const currentRoom = selectedRoom
+    ? rooms.find((r) => r.id === selectedRoom.id) || selectedRoom
+    : null;
 
   return (
     <div className="flex h-screen flex-col">
@@ -41,12 +129,15 @@ export default function Chat() {
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         <RoomList
-          selectedRoom={selectedRoom}
-          onSelectRoom={setSelectedRoom}
+          rooms={rooms}
+          selectedRoom={currentRoom}
+          onSelectRoom={handleSelectRoom}
           onLeaveRoom={handleLeaveRoom}
+          onJoinRoom={handleJoinRoom}
+          onRoomCreated={handleRoomCreated}
         />
-        {selectedRoom ? (
-          <ChatRoom room={selectedRoom} onJoinRoom={handleJoinRoom} />
+        {currentRoom ? (
+          <ChatRoom room={currentRoom} onJoinRoom={handleJoinRoom} />
         ) : (
           <div className="flex flex-1 items-center justify-center text-gray-500">
             <div className="text-center">

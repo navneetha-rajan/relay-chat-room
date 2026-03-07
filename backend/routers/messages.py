@@ -8,7 +8,7 @@ from auth import decode_token, get_current_user
 from database import SessionLocal, get_db
 from models import Message, Room, RoomMember, User
 from schemas import MessageOut, WSMessage
-from websocket_manager import manager
+from websocket_manager import app_manager, manager
 
 router = APIRouter(tags=["messages"])
 
@@ -50,6 +50,23 @@ def get_messages(
         )
         for msg, username in reversed(rows)
     ]
+
+
+@router.websocket("/ws/app")
+async def app_websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+    """Global WebSocket for app-level events (room created/joined/left)."""
+    payload = decode_token(token)
+    user_id = int(payload["sub"])
+
+    await app_manager.connect(user_id, websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        app_manager.disconnect(user_id)
 
 
 @router.websocket("/ws/{room_id}")

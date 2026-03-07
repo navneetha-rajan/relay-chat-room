@@ -54,3 +54,31 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+class AppConnectionManager:
+    """Manages global WebSocket connections for app-level events (one per user)."""
+
+    def __init__(self) -> None:
+        self._connections: dict[int, WebSocket] = {}
+
+    async def connect(self, user_id: int, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self._connections[user_id] = websocket
+
+    def disconnect(self, user_id: int) -> None:
+        self._connections.pop(user_id, None)
+
+    async def broadcast_all(self, message: dict) -> None:
+        payload = json.dumps(message, default=str)
+        stale: list[int] = []
+        for uid, ws in self._connections.items():
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                stale.append(uid)
+        for uid in stale:
+            self.disconnect(uid)
+
+
+app_manager = AppConnectionManager()

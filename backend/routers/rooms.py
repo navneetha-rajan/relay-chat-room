@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
 from models import Room, RoomMember, User
 from schemas import RoomCreate, RoomMemberOut, RoomOut
+from websocket_manager import app_manager
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
@@ -31,7 +32,7 @@ def list_rooms(db: Session = Depends(get_db), current_user: User = Depends(get_c
 
 
 @router.post("", response_model=RoomOut, status_code=status.HTTP_201_CREATED)
-def create_room(
+async def create_room(
     body: RoomCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -48,6 +49,17 @@ def create_room(
     db.add(membership)
     db.commit()
     db.refresh(room)
+
+    await app_manager.broadcast_all({
+        "type": "room_created",
+        "room": {
+            "id": room.id,
+            "name": room.name,
+            "created_by": room.created_by,
+            "created_at": str(room.created_at),
+        },
+    })
+
     return RoomOut(
         id=room.id,
         name=room.name,
@@ -58,7 +70,7 @@ def create_room(
 
 
 @router.post("/{room_id}/join", response_model=RoomOut)
-def join_room(
+async def join_room(
     room_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -72,6 +84,18 @@ def join_room(
         db.add(RoomMember(user_id=current_user.id, room_id=room_id))
         db.commit()
 
+        member_count = db.scalar(
+            select(func.count()).where(RoomMember.room_id == room_id)
+        )
+
+        await app_manager.broadcast_all({
+            "type": "room_joined",
+            "room_id": room_id,
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "member_count": member_count,
+        })
+
     return RoomOut(
         id=room.id,
         name=room.name,
@@ -82,7 +106,7 @@ def join_room(
 
 
 @router.post("/{room_id}/leave", status_code=status.HTTP_200_OK)
-def leave_room(
+async def leave_room(
     room_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -97,6 +121,19 @@ def leave_room(
 
     db.delete(membership)
     db.commit()
+
+    member_count = db.scalar(
+        select(func.count()).where(RoomMember.room_id == room_id)
+    )
+
+    await app_manager.broadcast_all({
+        "type": "room_left",
+        "room_id": room_id,
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "member_count": member_count,
+    })
+
     return {"detail": "Left room"}
 
 
