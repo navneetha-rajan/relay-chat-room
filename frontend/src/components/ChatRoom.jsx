@@ -1,7 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import api, { WS_BASE } from "../api";
 import { useAuth } from "../context/AuthContext";
 import UserList from "./UserList";
+
+const markdownComponents = {
+  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  code: ({ inline, className, children }) =>
+    inline ? (
+      <code className="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-[13px] text-indigo-300">{children}</code>
+    ) : (
+      <pre className="my-2 overflow-x-auto rounded-lg bg-gray-900 p-3">
+        <code className={`font-mono text-[13px] text-gray-300 ${className ?? ""}`}>{children}</code>
+      </pre>
+    ),
+  pre: ({ children }) => <>{children}</>,
+  blockquote: ({ children }) => (
+    <blockquote className="my-1 border-l-2 border-indigo-500 pl-3 text-gray-400">{children}</blockquote>
+  ),
+  ul: ({ children }) => <ul className="my-1 list-disc pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="my-1 list-decimal pl-5">{children}</ol>,
+  li: ({ children }) => <li className="mb-0.5">{children}</li>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300">
+      {children}
+    </a>
+  ),
+};
 
 const TYPING_DEBOUNCE_MS = 300;
 const TYPING_EXPIRE_MS = 2000;
@@ -18,6 +46,7 @@ export default function ChatRoom({ room, onJoinRoom }) {
   const [unreadDividerAfterId, setUnreadDividerAfterId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef(null);
+  const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const dividerRef = useRef(null);
@@ -221,6 +250,26 @@ export default function ChatRoom({ room, onJoinRoom }) {
     setConfirmingDeleteId(null);
   }
 
+  function insertFormatting(prefix, suffix = prefix) {
+    const el = inputRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = input.substring(start, end);
+    const before = input.substring(0, start);
+    const after = input.substring(end);
+
+    if (selected) {
+      setInput(before + prefix + selected + suffix + after);
+      const newEnd = end + prefix.length + suffix.length;
+      setTimeout(() => { el.focus(); el.setSelectionRange(start + prefix.length, newEnd - suffix.length); }, 0);
+    } else {
+      setInput(before + prefix + suffix + after);
+      const cursor = start + prefix.length;
+      setTimeout(() => { el.focus(); el.setSelectionRange(cursor, cursor); }, 0);
+    }
+  }
+
   if (!room.is_member) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -308,7 +357,11 @@ export default function ChatRoom({ room, onJoinRoom }) {
                       </div>
                     )}
                     <div className="flex items-start gap-1">
-                      <p className="min-w-0 flex-1 text-sm leading-relaxed text-gray-200">{msg.content}</p>
+                      <div className="min-w-0 flex-1 text-sm leading-relaxed text-gray-200">
+                        <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={markdownComponents}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
                       {isOwn && confirmingDeleteId !== msg.id && (
                         <button
                           onClick={() => setConfirmingDeleteId(msg.id)}
@@ -353,8 +406,80 @@ export default function ChatRoom({ room, onJoinRoom }) {
           )}
 
           <form onSubmit={handleSend} className="border-t border-gray-700 bg-gray-800 px-6 py-3">
+            <div className="mb-1.5 flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => insertFormatting("**")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Bold"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting("*")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Italic"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting("`")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Inline code"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting("```\n", "\n```")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Code block"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <polyline points="10 8 6 12 10 16" />
+                  <polyline points="14 8 18 12 14 16" />
+                </svg>
+              </button>
+              <div className="mx-1 h-4 w-px bg-gray-600" />
+              <button
+                type="button"
+                onClick={() => insertFormatting("- ", "")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Bullet list"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="4" cy="7" r="1.5" />
+                  <circle cx="4" cy="12" r="1.5" />
+                  <circle cx="4" cy="17" r="1.5" />
+                  <rect x="8" y="6" width="13" height="2" rx="1" />
+                  <rect x="8" y="11" width="13" height="2" rx="1" />
+                  <rect x="8" y="16" width="13" height="2" rx="1" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => insertFormatting("> ", "")}
+                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-white"
+                title="Blockquote"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z" />
+                </svg>
+              </button>
+            </div>
             <div className="flex gap-3">
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={handleInputChange}
