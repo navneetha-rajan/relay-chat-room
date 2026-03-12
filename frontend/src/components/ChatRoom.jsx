@@ -49,7 +49,7 @@ const TYPING_EXPIRE_MS = 2000;
 
 export default function ChatRoom({ room, onJoinRoom }) {
   const { user, token } = useAuth();
-  const [messages, setMessages] = useState([]);
+const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [activeUserIds, setActiveUserIds] = useState([]);
   const [input, setInput] = useState("");

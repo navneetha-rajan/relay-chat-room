@@ -39,12 +39,15 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc)
+
 
     user: Mapped["User"] = relationship(back_populates="messages")
     room: Mapped["Room"] = relationship(back_populates="messages")
 
-
+class Replies:
+    reply_id: Mapped[Dict[int, List[int]]] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    
 class RoomMember(Base):
     __tablename__ = "room_members"
 
