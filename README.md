@@ -58,7 +58,7 @@ npm run dev
 
 Open http://localhost:5173
 
-## What I'd Improve With More Time
+## TODO
 
 - Complete Read Reciept implementation - IN PROGRESS
 - Replace SQLite with PostgreSQL for production scale
